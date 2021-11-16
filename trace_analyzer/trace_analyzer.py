@@ -10,6 +10,7 @@ try :
     from scapy.sessions import IPSession
     from scapy.sessions import TCPSession
     from scapy.all import sniff
+    from scapy.layers.dns import DNS, DNSRR, DNSQR
 except :
     print("Error! Install 'scapy' ")
 
@@ -39,6 +40,17 @@ def read_pcap(str_path) :
     except :
         print("Error! Can't read pcpap file")
 
+def dns_query(pkts):
+    for pkt in pkts:
+        if pkt.haslayer(DNS):
+            if pkt.qdcount > 0 and isinstance(pkt.qd, DNSQR):
+                name = pkt.qd.qname
+            elif pkt.qdcount > 0 and isinstance(pkt.qd, DNSRR):
+                name = pkt.an.rdata
+            else:
+                continue
+
+            print(name)
 
 # GRAPHICAL DUMPS don't work
 def graphical_dumps(pkts) :
@@ -60,11 +72,16 @@ def sniff_IP(file_path):
 def main() :
     file_path = insert_flag().file
     print("Welcome to PCAP_Analyzer script\n\n\n")
-    print(file_path)
+    print("Path: ", file_path)
 
     pkts = read_pcap(file_path)
-    print(pkts)
 
+    print("\n\nFirst step: ", pkts)
+
+    print("\n\nDNS Query:\n")
+    dns_query(pkts)
+
+    print("\n\nSniff IP:\n\n")
     sniff_IP(file_path)
 
     # for pkt in pkts:
