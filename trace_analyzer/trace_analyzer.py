@@ -2,20 +2,24 @@ import os
 import argparse as Arg
 import time
 from collections import Counter
+from io import StringIO
+import csv
+import pyshark
+from lxml.builder import basestring
 
 try :
-    from scapy.utils import rdpcap
-    from scapy.utils import hexdump
-    from scapy.all import PcapReader
-    from scapy.all import raw
-    from scapy.sessions import IPSession
-    from scapy.sessions import TCPSession
-    from scapy.all import sniff, ARP
+    from scapy.all import *
+    from scapy.utils import rdpcap, hexdump, RawPcapReader
+    from scapy.all import PcapReader, raw, sniff
+    from scapy.sessions import IPSession, TCPSession
     from scapy.layers.dns import DNS, DNSRR, DNSQR
+    from scapy.layers.l2 import Ether, ARP
+    from scapy.layers.inet import IP, UDP, TCP
 except :
     print("Error! Install 'scapy' ")
 
 
+#**************************************************************************
 # READ FROM TERMINAL FLAG
 def insert_flag() :
     parser = Arg.ArgumentParser(description="ARGUMENT FOR THE SEARCH OF PCAP FILE")
@@ -26,6 +30,37 @@ def insert_flag() :
     args = parser.parse_args()
     return args
 
+#**************************************************************************
+#PCAP INFO
+def get_info(pkts):
+    file = open("Info.txt", 'w')
+    file.write("Info\n\n")
+
+    pack = Ether()/IP()/TCP()/UDP()
+
+    capture = StringIO()
+    save_stdout = sys.stdout
+    sys.stdout = capture
+    pack.show()
+    sys.stdout = save_stdout
+
+    file.write(capture.getvalue())
+
+    file.close()
+
+#CONVERSATION
+def conversation(pkts):
+    with open('conversation.csv', 'w', newline='') as file:
+        fcsv = csv.writer(file)
+        fcsv.writerow(['src', 'dst'])
+        for pkt in pkts:
+            fcsv.writerow([pkt.src, pkt.dst])
+    #with open('conversation.csv', 'w', newline='') as f:
+     #   fcsv = csv.writer(f)
+      #  fcsv.writerow(headers)
+       # fcsv.writerow(rows)
+
+#**************************************************************************
 # custum action function
 def custom_action(pkt) :
     key = tuple(sorted([pkt[0][1].src, pkt[0][1].dst]))
@@ -34,6 +69,7 @@ def custom_action(pkt) :
     return f"Packet #{sum(pkt_counts.values())}: {pkt[0][1].src} ==> {pkt[0][1].dst}"
 
 
+#**************************************************************************
 # FUNCTION THAT READ FILE PCAP
 def read_pcap(str_path) :
     try :
@@ -113,23 +149,30 @@ def main() :
     if not pkts:
         print("Error! File empty or damaged")
     else:
+        print("\nInfo:\n")
+        get_info(pkts)
+        print("Info.txt written...")
         print("\n*******************************************************\n")
-        print("\nDNS Query:\n")
-        print("\n*******************************************************\n")
-        dns_query(pkts)
 
+        print("\nConversation:\n")
+        conversation(pkts)
+        print("Conversation.csv written...")
         print("\n*******************************************************\n")
+
+        print("\nDNS Query:\n")
+        dns_query(pkts)
+        print("DNSQuery.txt written...")
+        print("\n*******************************************************\n")
+
         print("\nSniff IP:\n")
-        print("\n*******************************************************\n")
         sniff_IP(file_path)
+        print("Sniff.txt written...")
+        print("\n*******************************************************\n")
 
         # for pkt in pkts:
         # print(hexadecimal_dump(pkt))
 
-        print("\n*******************************************************\n")
         print("Process completed")
-        print("\n*******************************************************\n")
-
 
 
 
