@@ -1,5 +1,11 @@
 # trace_analyzer
 RDC_project 
 
+THIS SCRIPT IS FOR ANALYZING NETWORK TRAFFIC FROM A PCAP FILE.
 
-python trace_analyzer.py -f /path/.../to/.../file/.../file.pcap
+TO RUN WHIT SHELL WITH COMMAND:
+python trace_analyzer.py -f /path/.../to/.../file/.../file.pcap -o /path/.../to/.../output/
+
+
+**YOU NEED TO INSTALL SCAPY**
+pip install scapy
