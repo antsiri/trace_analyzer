@@ -4,8 +4,7 @@ import time
 from collections import Counter
 from io import StringIO
 import csv
-import pyshark
-from lxml.builder import basestring
+from tqdm import tqdm
 
 try :
     from scapy.all import *
@@ -22,52 +21,18 @@ except :
 #**************************************************************************
 # READ FROM TERMINAL FLAG
 def insert_flag() :
-    parser = Arg.ArgumentParser(description="ARGUMENT FOR THE SEARCH OF PCAP FILE")
+    parser = Arg.ArgumentParser(description="ARGUMENT FOR THE SEARCH OF PCAP FILE AND OUTPUT")
     parser.add_argument('-f',
                         '--file',
                         type=str,
-                        help='Enter the path to the file')
+                        help='Enter the path to the file pcap')
+    parser.add_argument('-o',
+                         '--output',
+                         type=str,
+                         help='Enter the path for output')
+
     args = parser.parse_args()
     return args
-
-#**************************************************************************
-#PCAP INFO
-def get_info(pkts):
-    file = open("Info.txt", 'w')
-    file.write("Info\n\n")
-
-    pack = Ether()/IP()/TCP()/UDP()
-
-    capture = StringIO()
-    save_stdout = sys.stdout
-    sys.stdout = capture
-    pack.show()
-    sys.stdout = save_stdout
-
-    file.write(capture.getvalue())
-
-    file.close()
-
-#CONVERSATION
-def conversation(pkts):
-    with open('conversation.csv', 'w', newline='') as file:
-        fcsv = csv.writer(file)
-        fcsv.writerow(['src', 'dst'])
-        for pkt in pkts:
-            fcsv.writerow([pkt.src, pkt.dst])
-    #with open('conversation.csv', 'w', newline='') as f:
-     #   fcsv = csv.writer(f)
-      #  fcsv.writerow(headers)
-       # fcsv.writerow(rows)
-
-#**************************************************************************
-# custum action function
-def custom_action(pkt) :
-    key = tuple(sorted([pkt[0][1].src, pkt[0][1].dst]))
-    pkt_counts = Counter()
-    pkt_counts.update([key])
-    return f"Packet #{sum(pkt_counts.values())}: {pkt[0][1].src} ==> {pkt[0][1].dst}"
-
 
 #**************************************************************************
 # FUNCTION THAT READ FILE PCAP
@@ -78,60 +43,77 @@ def read_pcap(str_path) :
     except :
         print("Error! Can't read pcpap file")
 
+#**************************************************************************
+#PCAP INFO
+def get_info(pkts, dir):
+    file = open(os.path.join(dir, "Info.txt"), 'w')
+    file.write("Info\n\n")
 
-def dns_query(pkts) :
-    file = open("DNSQuery.txt", 'w')
+    pack = Ether()/IP()/TCP()/UDP()
+
+    capture = StringIO()
+    save_stdout = sys.stdout
+    sys.stdout = capture
+    pack.show()
+    sys.stdout = save_stdout
+
+    for i in tqdm(range(0, 1)):
+        if i==0:
+            file.write(capture.getvalue())
+
+    file.close()
+
+#CONVERSATION
+def conversation(pkts, dir):
+    with open(os.path.join(dir, 'conversation.csv'), 'w', newline='') as file:
+        fcsv = csv.writer(file)
+        fcsv.writerow(['#', 'SOURCE', 'DESTINATION', 'TYPE'])
+        v = sniff(offline=pkts, pnr=lambda x : x.haslayer(TCP))
+        for i in tqdm(range(0, len(v))):
+            try:
+                if v[i].haslayer(TCP):
+                    fcsv.writerow([i+1, v[i].getlayer(IP).src, v[i].getlayer(IP).dst, "TCP"])
+                elif v[i].haslayer(UDP):
+                    fcsv.writerow([i+1, v[i].getlayer(IP).src, v[i].getlayer(IP).dst, "UDP"])
+            except:
+                print("can't read: ", i+1)
+                fcsv.writerow([i+1, '', '', "Other"])
+                continue
+
+#**************************************************************************
+# DNS QUERY
+def dns_query(pkts, dir) :
+    file = open(os.path.join(dir,"DNSQuery.txt"), 'w')
     file.write("DNSQuery\n\n")
     time.sleep(0.5)
-    for pkt in pkts :
-        if pkt.haslayer(DNS) :
-            if pkt.qdcount > 0 and isinstance(pkt.qd, DNSQR) :
-                name = pkt.qd.qname
-            elif pkt.qdcount > 0 and isinstance(pkt.qd, DNSRR) :
-                name = pkt.an.rdata
+    for i in tqdm(range(0, len(pkts))) :
+        if pkts[i].haslayer(DNS) :
+            if pkts[i].qdcount > 0 and isinstance(pkts[i].qd, DNSQR) :
+                name = pkts[i].qd.qname
+            elif pkts[i].qdcount > 0 and isinstance(pkts[i].qd, DNSRR) :
+                name = pkts[i].an.rdata
             else :
                 continue
 
             file.write(str(name))
             file.write("\n")
-    print("DNSQuery.txt created")
     file.close()
-
-
-# GRAPHICAL DUMPS don't work
-def graphical_dumps(pkts) :
-    pkts[423].pdfdump(layer_shift=1)
-
-
-# HEXADECIMAL DUMP
-def hexadecimal_dump(pkt) :
-    hex = hexdump(pkt)
-    print(hex)
-
-
-# ARP MONITOR
-def arp_monitor(pkt) :
-    if pkt[ARP].op == 1 :
-        return f"Request: {pkt[ARP].psrc} was asking {pkt[ARP].pdst}"
-    if pkt[ARP].op == 2 :
-        return f"*Response: {pkt[ARP].hwsrc} has address {pkt[ARP].psrc}"
 
 
 # SNIFF IP
-def sniff_IP(file_path) :
+def sniff_IP(file_path, dir) :
     from scapy.layers.tls.session import TLSSession
-    file = open("SNIFF_IP.txt", 'w')
+    file = open(os.path.join(dir, "SNIFF_IP.txt"), 'w')
     file.write("SNIFF_IP\n")
-    file.write(str(sniff(offline=file_path, session=TLSSession, prn=lambda x : x.summary())))
-    print("SNIFF_IP.txt created")
+    for i in tqdm(range(0, 1)):
+        if i == 0 :
+            file.write(str(sniff(offline=file_path, monitor=False, session=TLSSession, prn=lambda x : x.summary())))
     file.close()
 
 
-def sniff_arp(file_path) :
-    sniff(offline=file_path, prn=arp_monitor, filter='arp')
-
 def main() :
     file_path = insert_flag().file
+    output_path = insert_flag().output
     print("\n\n")
     print(" ____    ____     ____     ____    ____     ___        _   _____    ____   _____ ")
     print("|  _ \  |  _ \   / ___|   |  _ \  |  _ \   / _ \      | | | ____|  / ___| |_   _|")
@@ -143,34 +125,32 @@ def main() :
     print("\n*******************************************************\n")
 
     print("\n\nFile selected: ", file_path)
-
+    print("\n\nOutput path: ", output_path)
     pkts = read_pcap(file_path)
+
 
     if not pkts:
         print("Error! File empty or damaged")
     else:
         print("\nInfo:\n")
-        get_info(pkts)
+        get_info(pkts, output_path)
         print("Info.txt written...")
         print("\n*******************************************************\n")
 
         print("\nConversation:\n")
-        conversation(pkts)
+        conversation(pkts, output_path)
         print("Conversation.csv written...")
         print("\n*******************************************************\n")
 
         print("\nDNS Query:\n")
-        dns_query(pkts)
+        dns_query(pkts, output_path)
         print("DNSQuery.txt written...")
         print("\n*******************************************************\n")
 
         print("\nSniff IP:\n")
-        sniff_IP(file_path)
+        sniff_IP(file_path, output_path)
         print("Sniff.txt written...")
         print("\n*******************************************************\n")
-
-        # for pkt in pkts:
-        # print(hexadecimal_dump(pkt))
 
         print("Process completed")
 
