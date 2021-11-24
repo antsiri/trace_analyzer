@@ -7,5 +7,5 @@ THIS SCRIPT IS FOR ANALYZING NETWORK TRAFFIC FROM A PCAP FILE.
 python trace_analyzer.py -f /path/.../to/.../file/.../file.pcap -o /path/.../to/.../output/
 
 
-**YOU NEED TO INSTALL SCAPY**
+**YOU NEED TO INSTALL SCAPY\n**
 pip install scapy
