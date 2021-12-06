@@ -1,0 +1,161 @@
+import os
+import argparse as Arg
+import time
+from collections import Counter
+from io import StringIO
+import csv
+from tqdm import tqdm
+
+try :
+    from scapy.all import *
+    from scapy.utils import rdpcap, hexdump, RawPcapReader
+    from scapy.all import PcapReader, raw, sniff
+    from scapy.sessions import IPSession, TCPSession
+    from scapy.layers.dns import DNS, DNSRR, DNSQR
+    from scapy.layers.l2 import Ether, ARP
+    from scapy.layers.inet import IP, UDP, TCP
+except :
+    print("Error! Install 'scapy' ")
+
+
+#**************************************************************************
+# READ FROM TERMINAL FLAG
+def insert_flag() :
+    parser = Arg.ArgumentParser(description="ARGUMENT FOR THE SEARCH OF PCAP FILE AND OUTPUT")
+    parser.add_argument('-f',
+                        '--file',
+                        type=str,
+                        help='Enter the path to the file pcap')
+    parser.add_argument('-o',
+                         '--output',
+                         type=str,
+                         help='Enter the path for output')
+
+    args = parser.parse_args()
+    return args
+
+#**************************************************************************
+# FUNCTION THAT READ FILE PCAP
+def read_pcap(str_path) :
+    try :
+        a = rdpcap(str_path)
+        return a
+    except :
+        print("Error! Can't read pcpap file")
+
+#**************************************************************************
+#PCAP INFO
+def get_info(pkts, dir):
+    file = open(os.path.join(dir, "Info.txt"), 'w')
+    file.write("Info\n\n")
+
+    pack = Ether()/IP()/TCP()/UDP()
+
+    capture = StringIO()
+    save_stdout = sys.stdout
+    sys.stdout = capture
+    pack.show()
+    sys.stdout = save_stdout
+
+    for i in tqdm(range(0, 1)):
+        if i==0:
+            file.write(capture.getvalue())
+
+    file.close()
+
+#CONVERSATION
+def conversation(pkts, dir):
+    with open(os.path.join(dir, 'conversation.csv'), 'w', newline='') as file:
+        fcsv = csv.writer(file)
+        fcsv.writerow(['#', 'SOURCE', 'DESTINATION', 'TYPE'])
+        v = pkts
+        for i in tqdm(range(0, len(v))):
+            try:
+                if v[i].haslayer(TCP):
+                    fcsv.writerow([i+1, v[i].getlayer(IP).src, v[i].getlayer(IP).dst, "TCP"])
+                elif v[i].haslayer(UDP):
+                    fcsv.writerow([i+1, v[i].getlayer(IP).src, v[i].getlayer(IP).dst, "UDP"])
+            except:
+                print("can't read: ", i+1)
+                fcsv.writerow([i+1, '', '', "Other"])
+                continue
+
+#**************************************************************************
+# DNS QUERY
+def dns_query(pkts, dir) :
+    file = open(os.path.join(dir,"DNSQuery.txt"), 'w')
+    file.write("DNSQuery\n\n")
+    time.sleep(0.5)
+    for i in tqdm(range(0, len(pkts))) :
+        if pkts[i].haslayer(DNS) :
+            if pkts[i].qdcount > 0 and isinstance(pkts[i].qd, DNSQR) :
+                name = pkts[i].qd.qname
+            elif pkts[i].qdcount > 0 and isinstance(pkts[i].qd, DNSRR) :
+                name = pkts[i].an.rdata
+            else :
+                continue
+
+            file.write(str(name))
+            file.write("\n")
+    file.close()
+
+
+# SNIFF IP
+def sniff_IP(file_path, dir) :
+   # from scapy.layers.tls.session import TLSSession
+    file = open(os.path.join(dir, "SNIFF_IP.txt"), 'w')
+    file.write("SNIFF_IP\n")
+    for i in tqdm(range(0, 1)):
+        if i == 0 :
+            file.write(str(sniff(offline=file_path, monitor=False, prn=lambda x : x.summary())))
+    file.close()
+
+
+def main() :
+    file_path = insert_flag().file
+    output_path = insert_flag().output
+    print("\n\n")
+    print(" ____    ____     ____     ____    ____     ___        _   _____    ____   _____ ")
+    print("|  _ \  |  _ \   / ___|   |  _ \  |  _ \   / _ \      | | | ____|  / ___| |_   _|")
+    print("| |_) | | | | | | |       | |_) | | |_) | | | | |  _  | | |  _|   | |       | |  ")
+    print("|  _ <  | |_| | | |___    |  __/  |  _ <  | |_| | | |_| | | |___  | |___    | |  ")
+    print("|_| \_\ |____/   \____|   |_|     |_| \_\  \___/   \___/  |_____|  \____|   |_|  ")
+    print("\n*******************************************************\n")
+    print("by Filomena Vigliotti, Antonio Russo, Antonio Sirignano")
+    print("\n*******************************************************\n")
+
+    print("\n\nFile selected: ", file_path)
+    print("\n\nOutput path: ", output_path)
+    pkts = read_pcap(file_path)
+
+
+    if not pkts:
+        print("Error! File empty or damaged")
+    else:
+        print("\nInfo:\n")
+        get_info(pkts, output_path)
+        print("Info.txt written...")
+        print("\n*******************************************************\n")
+
+        print("\nConversation:\n")
+        conversation(pkts, output_path)
+        print("Conversation.csv written...")
+        print("\n*******************************************************\n")
+
+        print("\nDNS Query:\n")
+        dns_query(pkts, output_path)
+        print("DNSQuery.txt written...")
+        print("\n*******************************************************\n")
+
+        print("\nSniff IP:\n")
+        sniff_IP(file_path, output_path)
+        print("Sniff.txt written...")
+        print("\n*******************************************************\n")
+
+        print("Process completed")
+
+
+
+# Press the green button in the gutter to run the script.
+if __name__ == '__main__' :
+    main()
